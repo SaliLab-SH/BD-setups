@@ -1,0 +1,9 @@
+#!/bin/bash
+#BSUB -q qin
+#BSUB -o out_random
+#BSUB -e err_random
+#BSUB -n 1
+#BSUB -J random
+
+## Main run ##
+/home/install/software/conda2/bin/python random_setup.py 
