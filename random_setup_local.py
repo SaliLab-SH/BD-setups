@@ -18,6 +18,10 @@ from random import choice
 from random import uniform
 import GranuleFactory
 
+# record the simulation and ISG distance
+f1=open('random_ISG_record.txt', 'w')
+f2=open('random_ISG-NE_distance.xvg', 'w')
+
 def convert_time_ns_to_frames(time_ns, step_size_fs):
     '''
     Given time in nanoseconds time_ns and step size in femtosecond
@@ -46,6 +50,13 @@ def create_nucleus(m, R):
     IMP.atom.Hierarchy.setup_particle(p)
     return p
 
+def do_stats_after_optimize(granules):
+    '''write out ISG coordinates long time'''
+    distance = []
+    for g in granules:
+        distance.append(round(IMP.core.get_distance(IMP.core.XYZ(h_nucleus),IMP.core.XYZ(g)),4))
+    return distance
+
 #---------- Simulation parameters ----------
 
 # I. Parts parameters
@@ -71,7 +82,7 @@ print("Simulation time {:.1e} ns / {} frames; "
       "RMF dump interval {:.1e} ns / {} frames".format(sim_time_ns,
                                                       sim_time_frames,
                                                        RMF_DUMP_INTERVAL_NS,
-                                                      rmf_dump_interval_frames))
+                                                      rmf_dump_interval_frames), file = f1)
 
 # -------- I. System parts --------
 # Model:
@@ -155,13 +166,21 @@ sos.set_log_level(IMP.SILENT)
 sos.set_simulator(bd)
 sos.set_period(rmf_dump_interval_frames)
 bd.add_optimizer_state(sos)
+
 # Dump initial frame to RMF
 sos.update_always("initial conformation")
 
 # -------- Run simulation ---------
-print("Running simulation")
-#m.update()
-print("Score before: {:f}".format(sf.evaluate(True)))
-bd.optimize(sim_time_frames)
-print("Run finished succesfully")
-print("Score ater: {:f}".format(sf.evaluate(True)))
+print("Running simulation", file = f1)
+print("Score before: {:f}".format(sf.evaluate(True)), file = f1)
+n_frames_left=sim_time_frames
+frames_per_cycle=1000 # can be 10, or 100, dependeing on the frequency of the optimizer state and how much ISG moves.
+while n_frames_left>0:
+    cur_n_frames=min(frames_per_cycle, n_frames_left)
+    bd.optimize(cur_n_frames)
+    print(*do_stats_after_optimize(h_granules_root.get_children()), sep=" ", file = f2)
+    print(sim_time_frames - n_frames_left, file = f1)
+    n_frames_left = n_frames_left - cur_n_frames
+
+print("Run finished succesfully", file = f1)
+print("Score ater: {:f}".format(sf.evaluate(True)), file = f1)

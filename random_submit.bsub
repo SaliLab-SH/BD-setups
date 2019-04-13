@@ -4,6 +4,7 @@
 #BSUB -e err_random
 #BSUB -n 1
 #BSUB -J random
+#BSUB -m node01
 
 ## Main run ##
 /home/install/software/conda2/bin/python random_setup.py 
