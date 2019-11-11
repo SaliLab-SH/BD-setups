@@ -7,6 +7,7 @@ import IMP.atom
 import IMP.algebra
 import IMP.core
 import IMP.display
+import IMP.insulinsecretion
 
 def get_random_vector_in_cytoplasm(outer_sphere, inner_sphere):
     '''
@@ -19,15 +20,27 @@ def get_random_vector_in_cytoplasm(outer_sphere, inner_sphere):
         if vector.get_magnitude() > R_inner:
             return vector
 
+def get_random_vector_in_cytoplasm_except_cluster(outer_sphere, inner_sphere, cluster_sphere):
+    '''
+    Return a random vector inside cell (outer) sphere and
+    outside the nuclear envelope (=inner) sphere
+    '''
+    R_inner= inner_sphere.get_radius()
+    while True:
+        vector = IMP.algebra.get_random_vector_in(outer_sphere)
+        if vector.get_magnitude() > R_inner and all(map(lambda x:(vector - x.get_center()).get_magnitude() > x.get_radius(),cluster_sphere)):
+            return vector
+
 class GranuleFactory:
     '''
     A class for generating insulin granules
     '''
-    def __init__(self, model, default_R, cell_sphere, nucleus_sphere ):
+    def __init__(self, model, default_R, cell_sphere, nucleus_sphere, cluster_sphere ):
         self.model= model
         self.default_R= default_R
         self.cell_sphere= cell_sphere
         self.nucleus_sphere= nucleus_sphere
+        self.cluster_sphere= cluster_sphere
 
     def _create_granule_core(self, name):
         '''
@@ -38,12 +51,17 @@ class GranuleFactory:
         p= IMP.Particle(self.model, name)
         xyzr= IMP.core.XYZR.setup_particle(p)
         xyzr.set_coordinates_are_optimized(True)
-        v= get_random_vector_in_cytoplasm(self.cell_sphere,
-                                          self.nucleus_sphere)
+        v= get_random_vector_in_cytoplasm_except_cluster(self.cell_sphere,
+                                                         self.nucleus_sphere,
+                                                         self.cluster_sphere)
         xyzr.set_coordinates(v)
         xyzr.set_radius(self.default_R)
         # Setup (fake) mass and hierearchy
-        IMP.atom.Mass.setup_particle(p, 1)   
+        IMP.atom.Mass.setup_particle(p, 1)
+        # Setup the decorator for counting the number of secretion events
+        IMP.insulinsecretion.SecretionCounter.setup_particle(p, 0)
+        IMP.insulinsecretion.Maturation.setup_particle(p, 0)
+        # set the coordinate values
         IMP.atom.Hierarchy.setup_particle(p) 
         IMP.display.Colored.setup_particle(p,
                                            IMP.display.get_display_color(0))
@@ -66,7 +84,7 @@ class GranuleFactory:
         IMP.atom.Mass.setup_particle(p, 1)   
         IMP.atom.Hierarchy.setup_particle(p)
         IMP.display.Colored.setup_particle(p,
-                                           IMP.display.get_display_color(3))
+                                           IMP.display.get_display_color(2))
         return p
 
     def create_simple_granule(self, name):
@@ -89,6 +107,8 @@ class GranuleFactory:
                         name)
         # Setup (fake) mass and hierearchy
         IMP.atom.Mass.setup_particle(p, 1.0)
+        IMP.insulinsecretion.SecretionCounter.setup_particle(p, 0)
+        IMP.insulinsecretion.Maturation.setup_particle(p, 0)
         h= IMP.atom.Hierarchy.setup_particle(p)
         # Create core particle and add as rigid body core
         p_granule_core= self._create_granule_core(name + "_core")
@@ -107,6 +127,7 @@ class GranuleFactory:
                                                             patch_name)
             rb.add_member(p_patch)
             h.add_child(IMP.atom.Hierarchy(p_patch))
+
         # Set default diffusion coefficient according to the
         # Stokes radius of the core particle:
         rbd= IMP.atom.RigidBodyDiffusion.setup_particle(p)
